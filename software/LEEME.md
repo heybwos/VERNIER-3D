@@ -12,7 +12,7 @@ pip install -r requirements.txt
 python servidor.py --abrir
 ```
 
-Abre `http://localhost:8000` en Chrome o Edge. Todo funciona sin internet, porque Three.js y las fuentes están en `web/vendor/`.
+Abre `http://localhost:8000` en Chrome o Edge. Si ese puerto está ocupado, el servidor usa el siguiente libre y lo indica en la terminal. Todo funciona sin internet, porque Three.js y las fuentes están en `web/vendor/`.
 
 - **Simulador:** presiona "Nueva medición" y el simulador mide largo, ancho y alto como lo haría una persona.
 - **Manual:** escribe las tres medidas y presiona "Generar".

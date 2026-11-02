@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import os
+import socket
 import sys
 import time
 import webbrowser
@@ -242,6 +243,23 @@ async def inicio() -> FileResponse:
 app.mount("/", StaticFiles(directory=WEB), name="web")
 
 
+def puerto_libre(inicio: int, intentos: int = 20) -> int:
+    """Devuelve el primer puerto libre desde `inicio`; otra app puede estar usando el 8000."""
+    for puerto in range(inicio, inicio + intentos):
+        # En Windows el bind puede funcionar aunque otra app escuche en 0.0.0.0; por eso también se prueba conectar.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            if s.connect_ex(("127.0.0.1", puerto)) == 0:
+                continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", puerto))
+                return puerto
+            except OSError:
+                continue
+    sys.exit(f"No encontré un puerto libre entre {inicio} y {inicio + intentos - 1}.")
+
+
 def main() -> None:
     # La consola de Windows usa cp1252 y no imprime "→" ni acentos raros.
     for flujo in (sys.stdout, sys.stderr):
@@ -254,11 +272,14 @@ def main() -> None:
     args = ap.parse_args()
     if args.serial:
         os.environ["VERNIER_SERIAL"] = args.serial
-    url = f"http://localhost:{args.puerto_web}"
+    puerto = puerto_libre(args.puerto_web)
+    if puerto != args.puerto_web:
+        print(f"El puerto {args.puerto_web} está ocupado; uso el {puerto}.")
+    url = f"http://localhost:{puerto}"
     print(f"Vernier→3D en {url}  (Ctrl+C para salir)")
     if args.abrir:
         webbrowser.open(url)
-    uvicorn.run(app, host="127.0.0.1", port=args.puerto_web, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=puerto, log_level="warning")
 
 
 if __name__ == "__main__":
