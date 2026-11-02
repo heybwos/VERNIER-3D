@@ -95,6 +95,7 @@ monitor_speed = 115200
 const int PIN_CLK  = 18;
 const int PIN_DATA = 19;
 const uint32_t PAUSA_US = 2000;
+const bool DIAGNOSTICO = false;  // true: imprime tramas y pulsos en lugar de líneas M:
 
 volatile uint32_t pulsos = 0, ultimo = 0, bits = 0, trama = 0;
 volatile uint8_t  nbits = 0, tramaBits = 0;
@@ -119,7 +120,6 @@ void setup() {
   pinMode(PIN_CLK, INPUT);
   pinMode(PIN_DATA, INPUT);
   attachInterrupt(digitalPinToInterrupt(PIN_CLK), onClk, RISING);
-  Serial.println("Esperando pulsos del vernier...");
 }
 
 void loop() {
@@ -128,17 +128,19 @@ void loop() {
     noInterrupts();
     uint32_t b = trama; uint8_t n = tramaBits; lista = false;
     interrupts();
-    Serial.printf("%2u bits: ", n);
-    for (int i = 0; i < n; i++) Serial.print((b >> i) & 1);
-    if (n == 24) {
-      // bit 0 siempre 1, bits 1-20 = valor, bit 21 = signo negativo
+    if (DIAGNOSTICO) {
+      Serial.printf("%2u bits: ", n);
+      for (int i = 0; i < n; i++) Serial.print((b >> i) & 1);
+      Serial.println();
+    }
+    // bit 0 siempre 1, bits 1-20 = valor, bit 21 = signo negativo, bits 22-23 en 0
+    if (n == 24 && (b & 1) && !(b >> 22)) {
       int32_t valor = (b >> 1) & 0xFFFFF;
       if (b & (1UL << 21)) valor = -valor;
-      Serial.printf("  ->  %.2f mm", valor / 100.0);
+      if (!DIAGNOSTICO) Serial.printf("M:%.2f\n", valor / 100.0);
     }
-    Serial.println();
   }
-  if (millis() - t > 2000) {
+  if (DIAGNOSTICO && millis() - t > 2000) {
     t = millis();
     Serial.printf("pulsos totales: %lu\n", pulsos);
   }
@@ -149,7 +151,8 @@ void loop() {
 - Cada flanco `RISING` en GPIO 18 dispara la interrupción `onClk()`, que lee un bit de DATA.
 - Como la señal está invertida, un `RISING` en el ESP32 corresponde a un flanco de bajada en el vernier, y `!digitalRead` deshace la inversión de DATA.
 - Una pausa de más de 2 ms (`PAUSA_US`) sin pulsos marca el fin de una trama.
-- `loop()` imprime los bits de cada trama y su valor en mm. Cada 2 s imprime el contador total de pulsos.
+- `loop()` valida cada trama de 24 bits e imprime su valor como `M:<mm>`, el formato que espera la app.
+- Para ver bits y pulsos, cambia `DIAGNOSTICO` a `true`, compila y sube. En ese modo la app no recibe medidas.
 
 ---
 
@@ -179,11 +182,9 @@ Para salir del monitor: **Ctrl+C**.
 ### Salida esperada
 
 ```
-Esperando pulsos del vernier...
-24 bits: 100000000000000000000000  ->  0.00 mm
-24 bits: 101001111110000000000000  ->  10.10 mm
-24 bits: 111010001100000000000100  ->  -3.95 mm
-pulsos totales: 64528
+M:0.00
+M:10.10
+M:-3.95
 ```
 
 ---
@@ -221,7 +222,22 @@ Ningún bit de la trama indica si el vernier está en mm o en pulgadas. **El có
 
 ---
 
-## 6. Solución de problemas
+## 6. Usar la app 3D
+
+1. Sube el firmware y presiona **EN/RST**.
+2. Cierra el monitor serie y SignalRGB, porque ocupan el puerto.
+3. Instala las dependencias una sola vez y arranca el servidor desde `software/`:
+   ```
+   pip install -r requirements.txt
+   python servidor.py --serial auto --abrir
+   ```
+4. En la página, inicia la medición. Captura cada cota con la **barra espaciadora**.
+
+Más detalles en `software/LEEME.md`.
+
+---
+
+## 7. Solución de problemas
 
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
@@ -229,8 +245,8 @@ Ningún bit de la trama indica si el vernier está en mm o en pulgadas. **El có
 | La subida se queda en `Connecting...` o da "Wrong boot mode" | La placa no entró en modo de descarga | Mantén BOOT presionado durante la subida |
 | La subida falla con el puerto ocupado | El monitor está abierto | Cierra el monitor con Ctrl+C |
 | `pio` no se reconoce en la terminal | `pio` no está en el PATH | Usa la terminal PlatformIO Core CLI o la ruta completa |
-| `pulsos totales: 0` | El vernier está apagado, no hay GND común o CLK está desconectado | Revisa la alimentación, el GND y el transistor de CLK |
-| Los bits por trama varían | CLK y DATA están intercambiados | Intercambia los jumpers de GPIO 18 y 19 |
+| Con `DIAGNOSTICO = true`, `pulsos totales: 0` | El vernier está apagado, no hay GND común o CLK está desconectado | Revisa la alimentación, el GND y el transistor de CLK |
+| Con `DIAGNOSTICO = true`, los bits por trama varían | CLK y DATA están intercambiados | Intercambia los jumpers de GPIO 18 y 19 |
 | 24 bits estables pero el valor no cambia al mover la mordaza | DATA no llega o se lee en el flanco equivocado | Revisa el transistor de DATA; si sigue igual, cambia `RISING` por `FALLING` (con este hardware no hizo falta) |
 | La medida no coincide con la pantalla | El vernier está en pulgadas | Pásalo a mm |
 | Al principio aparece una trama de 1 bit | La lectura empezó a mitad de una trama | Es normal, se ignora sola |

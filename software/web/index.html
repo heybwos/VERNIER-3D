@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vernier→3D</title>
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Barra superior: marca, recorrido del dato y estado -->
+  <header class="top">
+    <div class="brand">Vernier<b>→</b>3D<small>Escáner dimensional · metrología</small></div>
+
+    <ol class="pipe" id="pipe" aria-label="Recorrido del dato">
+      <li id="pnVernier"><span class="ic">◧</span><span class="nm">Vernier</span><span class="st" id="psVernier">—</span></li>
+      <li class="wire"><i></i></li>
+      <li id="pnEsp"><span class="ic">▣</span><span class="nm">ESP32</span><span class="st" id="psEsp">—</span></li>
+      <li class="wire"><i></i></li>
+      <li id="pnUsb"><span class="ic">⇌</span><span class="nm">USB serial</span><span class="st" id="psUsb">115200</span></li>
+      <li class="wire"><i></i></li>
+      <li id="pnSrv"><span class="ic">◎</span><span class="nm">Servidor</span><span class="st" id="psSrv">—</span></li>
+      <li class="wire"><i></i></li>
+      <li id="pnView"><span class="ic">◆</span><span class="nm">Visor 3D</span><span class="st" id="psView">listo</span></li>
+    </ol>
+
+    <div class="chips">
+      <button class="chip fs" id="btnFs" type="button" title="Pantalla completa (tecla F)"><span id="fsIc">⛶</span><span id="fsTxt">Pantalla completa</span></button>
+      <span class="chip ok" id="chipState"><i></i><span id="stateTxt">Listo</span></span>
+    </div>
+  </header>
+
+  <!-- Columna izquierda: secuencia, fuente y controles -->
+  <aside class="panel left">
+    <div class="grp" id="boxCtl">
+      <h3>Fuente de medidas</h3>
+      <div class="seg c3" id="srcBtns" role="radiogroup" aria-label="Fuente de medidas">
+        <button type="button" data-src="simulador" role="radio">Simulador</button>
+        <button type="button" data-src="manual" role="radio">Manual</button>
+        <button type="button" data-src="serial" role="radio">ESP32</button>
+      </div>
+      <div class="srcinfo" id="serialBox" hidden>
+        <label class="lbl" for="selPort">Puerto</label>
+        <div class="row">
+          <select id="selPort"><option value="auto">Detectar (CP2102 / CH340)</option></select>
+          <button class="mini" id="btnPorts" type="button" title="Buscar puertos">↻</button>
+        </div>
+        <p class="note" id="serialMsg">—</p>
+      </div>
+
+      <h3>Secuencia de medición</h3>
+      <ol class="steps">
+        <li class="step" id="stepL"><span class="k">L</span><span><span class="n">Largo</span><br><span class="s">eje X · 1D línea</span></span><span class="v" id="vL">--.--</span></li>
+        <li class="step" id="stepW"><span class="k">A</span><span><span class="n">Ancho</span><br><span class="s">eje Z · 2D plano</span></span><span class="v" id="vW">--.--</span></li>
+        <li class="step" id="stepH"><span class="k">H</span><span><span class="n">Alto</span><br><span class="s">eje Y · 3D volumen</span></span><span class="v" id="vH">--.--</span></li>
+      </ol>
+
+      <div id="guidedCtl">
+        <button class="btn" id="btnNew" type="button">▶ Nueva medición</button>
+        <div class="two">
+          <button class="btn ghost" id="btnCap" type="button" title="Captura la lectura actual (tecla espacio)">Capturar</button>
+          <button class="btn ghost" id="btnRedoAx" type="button">↶ Repetir cota</button>
+        </div>
+        <button class="btn ghost" id="btnStop" type="button">Cancelar medición</button>
+      </div>
+
+      <div id="manualCtl" hidden>
+        <form id="manForm" class="manual" novalidate>
+          <label>Largo<input id="inL" inputmode="decimal" value="50.00" aria-label="Largo en mm"></label>
+          <label>Ancho<input id="inW" inputmode="decimal" value="30.00" aria-label="Ancho en mm"></label>
+          <label>Alto<input id="inH" inputmode="decimal" value="20.00" aria-label="Alto en mm"></label>
+          <button type="submit" hidden></button>
+        </form>
+        <p class="err" id="err"></p>
+        <button class="btn" id="btnGen" type="button">Generar con estas medidas</button>
+      </div>
+      <button class="btn ghost" id="btnReplay" type="button">↻ Repetir reconstrucción</button>
+    </div>
+
+    <div class="grp" id="holeSec">
+      <h3>Agujeros y bloques</h3>
+      <p class="note" id="hHint">Toca una cara de la pieza o de un bloque, o elígela aquí.</p>
+      <span class="lbl" id="hBody">Caras de la base</span>
+      <div class="faces" id="faceBtns"></div>
+      <div class="two">
+        <button class="btn ghost" id="btnHole" type="button" disabled>＋ Agujero</button>
+        <button class="btn ghost" id="btnBlock" type="button" disabled>＋ Bloque</button>
+      </div>
+      <h3>Árbol del modelo</h3>
+      <p class="note">Toca una cota para volver a medirla con el vernier.</p>
+      <div class="editbar" id="editBar" hidden>
+        <b id="ebName">Editando</b>
+        <span class="eb-old" id="ebOld"></span>
+        <div class="two">
+          <button class="btn" id="ebSim" type="button">▶ Simular</button>
+          <button class="btn ghost" id="ebCap" type="button" title="Captura la lectura actual (tecla espacio)">Capturar</button>
+        </div>
+        <form class="ebrow" id="ebForm" autocomplete="off">
+          <input id="ebIn" inputmode="decimal" placeholder="o escribe mm" aria-label="Nuevo valor en mm">
+          <button class="mini" type="submit">Fijar</button>
+          <button class="mini" id="ebZero" type="button" hidden>Pegado</button>
+          <button class="mini" id="ebCancel" type="button">Cancelar</button>
+        </form>
+        <p class="err" id="ebErr"></p>
+      </div>
+      <ol class="tree" id="holeList"></ol>
+    </div>
+
+    <div class="grp" id="blockJob" hidden>
+      <h3 id="bjTitle">Nuevo bloque</h3>
+      <div><span class="lbl">Esquina de origen</span>
+        <div class="seg c4"><button type="button" id="bc0">1</button><button type="button" id="bc1">2</button><button type="button" id="bc2">3</button><button type="button" id="bc3">4</button></div></div>
+      <ol class="steps">
+        <li class="step" id="bsL"><span class="k">L</span><span><span class="n">Largo</span><br><span class="s">exteriores · dirección X</span></span><span class="v" id="bvL">--.--</span></li>
+        <li class="step" id="bsW"><span class="k">A</span><span><span class="n">Ancho</span><br><span class="s">exteriores · dirección Y</span></span><span class="v" id="bvW">--.--</span></li>
+        <li class="step" id="bsH"><span class="k">H</span><span><span class="n">Alto</span><br><span class="s">escalón del vernier</span></span><span class="v" id="bvH">--.--</span></li>
+        <li class="step" id="bsX"><span class="k">X</span><span><span class="n">Orilla → pared</span><br><span class="s">escalón · o pegado</span></span><span class="v" id="bvX">--.--</span></li>
+        <li class="step" id="bsY"><span class="k">Y</span><span><span class="n">Orilla → pared</span><br><span class="s">escalón · o pegado</span></span><span class="v" id="bvY">--.--</span></li>
+      </ol>
+      <div class="two">
+        <button class="btn ghost" id="btnBX0" type="button" title="El bloque toca la orilla X: distancia 0">X pegado (0)</button>
+        <button class="btn ghost" id="btnBY0" type="button" title="El bloque toca la orilla Y: distancia 0">Y pegado (0)</button>
+      </div>
+      <p class="note center" id="bPos"></p>
+      <div class="two">
+        <button class="btn" id="btnBSim" type="button">▶ Simular</button>
+        <button class="btn ghost" id="btnBCap" type="button" title="Captura la lectura actual (tecla espacio)">Capturar</button>
+      </div>
+      <form id="bForm" class="manual five" novalidate>
+        <label>Largo<input id="biL" inputmode="decimal" placeholder="20.00" aria-label="Largo del bloque en mm"></label>
+        <label>Ancho<input id="biW" inputmode="decimal" placeholder="15.00" aria-label="Ancho del bloque en mm"></label>
+        <label>Alto<input id="biH" inputmode="decimal" placeholder="10.00" aria-label="Alto del bloque en mm"></label>
+        <label>X<input id="biX" inputmode="decimal" placeholder="0" aria-label="Distancia X de la orilla a la pared del bloque en mm; vacío es pegado"></label>
+        <label>Y<input id="biY" inputmode="decimal" placeholder="0" aria-label="Distancia Y de la orilla a la pared del bloque en mm; vacío es pegado"></label>
+        <button type="submit" hidden></button>
+      </form>
+      <button class="btn ghost" id="btnBMan" type="button">Usar valores manuales</button>
+      <div class="checks" id="bChecks" aria-live="polite"></div>
+      <button class="btn ok" id="btnBOk" type="button">✔ Confirmar bloque</button>
+      <div class="two">
+        <button class="btn ghost" id="btnBRedo" type="button">↻ Medir de nuevo</button>
+        <button class="btn ghost" id="btnBCancel" type="button">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="grp" id="holeJob" hidden>
+      <h3 id="hjTitle">Nuevo agujero</h3>
+      <div><span class="lbl">Esquina de origen</span>
+        <div class="seg c4" id="cornerBtns"><button type="button" id="cb0">1</button><button type="button" id="cb1">2</button><button type="button" id="cb2">3</button><button type="button" id="cb3">4</button></div></div>
+      <div><span class="lbl">Tipo</span>
+        <div class="seg"><button type="button" id="tThrough">Pasante</button><button type="button" id="tBlind">Ciego</button></div></div>
+      <ol class="steps">
+        <li class="step" id="hsD"><span class="k">Ø</span><span><span class="n">Diámetro</span><br><span class="s">mordazas de interiores</span></span><span class="v" id="hvD">--.--</span></li>
+        <li class="step" id="hsX"><span class="k">X</span><span><span class="n">Orilla → pared</span><br><span class="s">el programa suma Ø/2</span></span><span class="v" id="hvX">--.--</span></li>
+        <li class="step" id="hsY"><span class="k">Y</span><span><span class="n">Orilla → pared</span><br><span class="s">el programa suma Ø/2</span></span><span class="v" id="hvY">--.--</span></li>
+        <li class="step" id="hsP"><span class="k">P</span><span><span class="n">Profundidad</span><br><span class="s">varilla de profundidad</span></span><span class="v" id="hvP">--.--</span></li>
+      </ol>
+      <p class="note center" id="hCenter"></p>
+      <div class="two">
+        <button class="btn" id="btnHSim" type="button">▶ Simular</button>
+        <button class="btn ghost" id="btnHCap" type="button" title="Captura la lectura actual (tecla espacio)">Capturar</button>
+      </div>
+      <form id="hForm" class="manual four" novalidate>
+        <label>Ø<input id="hiD" inputmode="decimal" placeholder="6.00" aria-label="Diámetro en mm"></label>
+        <label>X<input id="hiX" inputmode="decimal" placeholder="8.00" aria-label="Distancia X de la orilla a la pared en mm"></label>
+        <label>Y<input id="hiY" inputmode="decimal" placeholder="8.00" aria-label="Distancia Y de la orilla a la pared en mm"></label>
+        <label>Prof.<input id="hiP" inputmode="decimal" placeholder="10.00" aria-label="Profundidad en mm"></label>
+        <button type="submit" hidden></button>
+      </form>
+      <button class="btn ghost" id="btnHMan" type="button">Usar valores manuales</button>
+      <div class="checks" id="hChecks" aria-live="polite"></div>
+      <button class="btn ok" id="btnHOk" type="button">✔ Confirmar perforación</button>
+      <div class="two">
+        <button class="btn ghost" id="btnHRedo" type="button">↻ Medir de nuevo</button>
+        <button class="btn ghost" id="btnHCancel" type="button">Cancelar</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Vista 3D -->
+  <main class="stage" aria-label="Vista 3D">
+    <div id="view"></div>
+    <div class="phase" aria-live="polite">
+      <div class="row">
+        <span class="p" id="ph0">00 Medición</span>
+        <span class="p" id="ph1">01 Nube de puntos</span>
+        <span class="p" id="ph2">02 Malla</span>
+        <span class="p" id="ph3">03 Sólido CAD</span>
+      </div>
+      <div class="bar"><i id="phBar"></i></div>
+    </div>
+    <div class="hint" id="hint">Arrastra para girar · rueda para zoom · toca una cara</div>
+    <div id="tags"></div>
+    <div id="faceMenu" hidden><span id="fmTxt"></span><button type="button" id="fmHole">＋ Agujero</button><button type="button" id="fmBlock">＋ Bloque</button></div>
+    <div class="prompt" id="prompt" hidden></div>
+    <div class="axes" aria-hidden="true"><span class="x">X largo</span><span class="y">Y alto</span><span class="z">Z ancho</span></div>
+  </main>
+
+  <!-- Columna derecha: lectura en vivo, qué se mide y métricas -->
+  <aside class="panel right">
+    <h3>Lectura del vernier</h3>
+    <div class="readout" id="readout">
+      <span class="l" id="liveLbl">Sin cota activa</span>
+      <span class="big"><span id="liveVal">--.--</span><small>mm</small></span>
+      <div class="ruler" aria-hidden="true">
+        <div class="fill" id="rulerFill"></div>
+        <div class="ticks"></div>
+        <div class="nums"><span>0</span><span>50</span><span>100</span><span>150</span></div>
+      </div>
+      <canvas id="spark" height="44" aria-label="Últimas lecturas"></canvas>
+      <div class="stab" id="stab"><i></i><span id="stabTxt">Esperando lecturas</span></div>
+      <span class="sub" id="liveSub">0 paquetes/s · último: —</span>
+    </div>
+
+    <h3>Qué se está midiendo</h3>
+    <div class="what" id="what">
+      <b id="whatName">Pieza lista</b>
+      <span class="tool" id="whatTool">—</span>
+      <p id="whatHow">Presiona “Nueva medición” para medir una caja con el vernier, o toca una cara para agregar un agujero.</p>
+    </div>
+
+    <h3>Pieza generada</h3>
+    <div class="metrics">
+      <div class="metric"><span>Envolvente L × A × H (mm)</span><b id="mDims">—</b></div>
+      <div class="metric"><span>Volumen</span><b id="mVol">—</b></div>
+      <div class="metric"><span>Área superficial</span><b id="mArea">—</b></div>
+      <div class="metric"><span>Diagonal</span><b id="mDiag">—</b></div>
+      <div class="metric"><span>Masa maciza en PLA</span><b id="mMass">—</b></div>
+      <div class="metric"><span>Bloques</span><b id="mBlocks">0</b></div>
+      <div class="metric"><span>Agujeros</span><b id="mHoles">0</b></div>
+    </div>
+    <p class="note">PLA a 1.24 g/cm³ con 100 % de relleno. Volumen, área y masa ya descuentan los agujeros.</p>
+  </aside>
+
+  <!-- Registro y consola -->
+  <section class="logbox">
+    <div class="log" id="log" aria-label="Registro de eventos"></div>
+    <form class="console" id="conForm" autocomplete="off">
+      <span>›</span>
+      <input id="conIn" placeholder="Escribe una línea como el ESP32: M:25.40 · C:25.40 · texto basura…" aria-label="Línea para enviar">
+      <button type="submit" class="mini">Enviar</button>
+    </form>
+  </section>
+</div>
+
+<script src="vendor/three/three.min.js"></script>
+<script src="vendor/three/OrbitControls.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

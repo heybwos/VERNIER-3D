@@ -3,6 +3,7 @@
 const int PIN_CLK  = 18;
 const int PIN_DATA = 19;
 const uint32_t PAUSA_US = 2000;
+const bool DIAGNOSTICO = false;  // true: imprime tramas y pulsos en lugar de líneas M:
 
 volatile uint32_t pulsos = 0, ultimo = 0, bits = 0, trama = 0;
 volatile uint8_t  nbits = 0, tramaBits = 0;
@@ -27,7 +28,6 @@ void setup() {
   pinMode(PIN_CLK, INPUT);
   pinMode(PIN_DATA, INPUT);
   attachInterrupt(digitalPinToInterrupt(PIN_CLK), onClk, RISING);
-  Serial.println("Esperando pulsos del vernier...");
 }
 
 void loop() {
@@ -36,17 +36,19 @@ void loop() {
     noInterrupts();
     uint32_t b = trama; uint8_t n = tramaBits; lista = false;
     interrupts();
-    Serial.printf("%2u bits: ", n);
-    for (int i = 0; i < n; i++) Serial.print((b >> i) & 1);
-    if (n == 24) {
-      // bit 0 siempre 1, bits 1-20 = valor, bit 21 = signo negativo
+    if (DIAGNOSTICO) {
+      Serial.printf("%2u bits: ", n);
+      for (int i = 0; i < n; i++) Serial.print((b >> i) & 1);
+      Serial.println();
+    }
+    // bit 0 siempre 1, bits 1-20 = valor, bit 21 = signo negativo, bits 22-23 en 0
+    if (n == 24 && (b & 1) && !(b >> 22)) {
       int32_t valor = (b >> 1) & 0xFFFFF;
       if (b & (1UL << 21)) valor = -valor;
-      Serial.printf("  ->  %.2f mm", valor / 100.0);
+      if (!DIAGNOSTICO) Serial.printf("M:%.2f\n", valor / 100.0);
     }
-    Serial.println();
   }
-  if (millis() - t > 2000) {
+  if (DIAGNOSTICO && millis() - t > 2000) {
     t = millis();
     Serial.printf("pulsos totales: %lu\n", pulsos);
   }
